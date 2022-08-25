@@ -1,0 +1,69 @@
+diff --git a/server/app/src/main.rs b/server/app/src/main.rs
+index 99bcf92..1a4ac1f 100644
+--- a/server/app/src/main.rs
++++ b/server/app/src/main.rs
+@@ -59,7 +59,7 @@ type NonceSize = <CipherType as NewCipher>::NonceSize;
+ type KeySize = <CipherType as NewCipher>::KeySize;
+ type RngType = Hc128Rng;
+ 
+-type StorageBlockSize = U1024;
++type StorageBlockSize = U64;
+ 
+ static ENCLAVE_FILE: &'static str = "enclave.signed.so";
+ 
+diff --git a/server/enclave/src/lib.rs b/server/enclave/src/lib.rs
+index 77d1386..a2d607e 100644
+--- a/server/enclave/src/lib.rs
++++ b/server/enclave/src/lib.rs
+@@ -93,9 +93,9 @@ type KeySize = <CipherType as NewCipher>::KeySize;
+ /// Sometimes you need to have the type in scope to call trait functions
+ type RngType = Hc128Rng;
+ /// Parameters that correspond to PathORAM4096Z4Creator, should be consist with crate::oram_manager (DataMetaSize)
+-type StorageBlockSize = U1024;
++type StorageBlockSize = U64;
+ type StorageBlockMetaSize = U24;
+-type StorageBucketSize = U4096;
++type StorageBucketSize = U256;
+ type StorageBucketMetaSize = U96; //MetaSize(24)*Z(4)
+ type StorageZ = U4;
+ //according to the Table 3 in the Path ORAM paper, the maximum stash size required such that the probability of
+@@ -104,7 +104,7 @@ type StorageZ = U4;
+ //(set in shuffle_manager.rs). The stash size does not include the temporarily fetched path during Access.
+ const STASH_SIZE: usize = 89;
+ /// Bucket size = U4096, Z = U4, MetaSize = U96
+-type ORAMCreatorClass = PathORAM4096Z4Creator<RngType, OcallORAMStorageCreator>;
++type ORAMCreatorClass = PathORAM256Z4Creator<RngType, OcallORAMStorageCreator>;
+ type ORAMClass = PathORAM<
+     StorageBlockSize,
+     StorageBlockMetaSize,
+diff --git a/server/enclave/src/oram_storage/shuffle_manager.rs b/server/enclave/src/oram_storage/shuffle_manager.rs
+index 07c33c6..1422b52 100644
+--- a/server/enclave/src/oram_storage/shuffle_manager.rs
++++ b/server/enclave/src/oram_storage/shuffle_manager.rs
+@@ -29,7 +29,7 @@ use std::vec::Vec;
+ 
+ //The parameter in bucket oblivious sort
+ //For an overflow probability of 2^-80 and most reasonable values of n, Z = 512 suffices.
+-pub const BIN_SIZE_IN_BLOCK: usize = 512;
++pub const BIN_SIZE_IN_BLOCK: usize = 512 * 8;
+ const NUM_THREADS: usize = 8;
+ lazy_static! {
+     // The key used to encrypt the tmp position map. Note that the tmp pos map is transfer across
+diff --git a/server/execute.sh b/server/execute.sh
+index 58e1056..8a4ccfe 100755
+--- a/server/execute.sh
++++ b/server/execute.sh
+@@ -1,11 +1,11 @@
+ #!/bin/bash
+-for lognum in 29 30 31 32
++for lognum in 26 27 28 29 30 31 32 33 34 35
+ do
+     let tmp=${lognum}-20-1
+     let k=2**tmp
+     sed -i "s/[0-9]\{1,4\} << 10/${k} << 10/g" app/src/main.rs enclave/src/lib.rs
+     sed -i "s/[0-9]\{1,2\}u32-/${lognum}u32-/g" app/src/storage_ocalls/mod.rs enclave/src/oram_storage/mod.rs
+-    for ratio in 16 8 4 2 1
++    for ratio in 1
+     do
+         sed -i "s/${lognum}u32-[0-9]\{1,2\}u/${lognum}u32-${ratio}u/g" app/src/storage_ocalls/mod.rs enclave/src/oram_storage/mod.rs
+         make
